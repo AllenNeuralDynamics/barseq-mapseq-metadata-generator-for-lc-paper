@@ -2,17 +2,27 @@
 
 Iterates the SUBJECTS dict, builds Procedures + MAPseq + BARseq Acquisition
 objects for each, validates each via JSON round-trip, and writes the JSON
-files to /results/<subject_id>/.
+files to /results/<subject_id>/<modality>/.
 
-Output layout:
-    /results/780345/procedures.json
-    /results/780345/mapseq_acquisition.json
-    /results/780345/barseq_acquisition.json
-    /results/780346/procedures.json
-    /results/780346/mapseq_acquisition.json
-    /results/780346/barseq_acquisition.json
+The same procedures.json is written into both modality folders — the brain
+was sectioned once and the Procedures object is per-subject, not per-modality.
+Repeating it lets each modality folder be uploaded as a self-contained unit.
+
+Each modality folder also receives a gather_metadata_settings.json — the
+JobSettings file consumed by aind-metadata-mapper's gather_metadata job to
+fetch subject.json and complete data_description.json from the AIND on-prem
+metadata service. See README.md for the local invocation.
+
+Output layout (per subject):
+    <subject>/mapseq/procedures.json
+    <subject>/mapseq/acquisition.json
+    <subject>/mapseq/gather_metadata_settings.json
+    <subject>/barseq/procedures.json
+    <subject>/barseq/acquisition.json
+    <subject>/barseq/gather_metadata_settings.json
 """
 
+import json
 import os
 from pathlib import Path
 
@@ -21,6 +31,7 @@ from aind_data_schema.core.procedures import Procedures
 
 from generators import (
     build_barseq_acquisition,
+    build_gather_metadata_settings,
     build_mapseq_acquisition,
     build_procedures,
 )
@@ -39,20 +50,30 @@ def _validate_roundtrip(model_obj, model_cls):
 def run() -> None:
     for subject_id, cfg in SUBJECTS.items():
         print(f"=== {subject_id} ===")
-        out_dir = RESULTS_DIR / subject_id
-        out_dir.mkdir(parents=True, exist_ok=True)
+        mapseq_dir = RESULTS_DIR / subject_id / "mapseq"
+        barseq_dir = RESULTS_DIR / subject_id / "barseq"
+        mapseq_dir.mkdir(parents=True, exist_ok=True)
+        barseq_dir.mkdir(parents=True, exist_ok=True)
 
         procedures = _validate_roundtrip(build_procedures(subject_id, cfg), Procedures)
         mapseq_acq = _validate_roundtrip(build_mapseq_acquisition(subject_id, cfg, procedures), Acquisition)
         barseq_acq = _validate_roundtrip(build_barseq_acquisition(subject_id, cfg, procedures), Acquisition)
 
-        (out_dir / "procedures.json").write_text(procedures.model_dump_json(indent=3))
-        (out_dir / "mapseq_acquisition.json").write_text(mapseq_acq.model_dump_json(indent=3))
-        (out_dir / "barseq_acquisition.json").write_text(barseq_acq.model_dump_json(indent=3))
+        procedures_json = procedures.model_dump_json(indent=3)
+        (mapseq_dir / "procedures.json").write_text(procedures_json)
+        (barseq_dir / "procedures.json").write_text(procedures_json)
+        (mapseq_dir / "acquisition.json").write_text(mapseq_acq.model_dump_json(indent=3))
+        (barseq_dir / "acquisition.json").write_text(barseq_acq.model_dump_json(indent=3))
 
-        print(f"  procedures.json:           {len(procedures.specimen_procedures)} specimen procedures")
-        print(f"  mapseq_acquisition.json:   {len(mapseq_acq.specimen_id)} specimens")
-        print(f"  barseq_acquisition.json:   {len(barseq_acq.specimen_id)} specimens")
+        mapseq_settings = build_gather_metadata_settings(subject_id, "MAPseq")
+        barseq_settings = build_gather_metadata_settings(subject_id, "BARseq")
+        (mapseq_dir / "gather_metadata_settings.json").write_text(json.dumps(mapseq_settings, indent=3))
+        (barseq_dir / "gather_metadata_settings.json").write_text(json.dumps(barseq_settings, indent=3))
+
+        print(f"  procedures.json:           {len(procedures.specimen_procedures)} specimen procedures (written to both modality folders)")
+        print(f"  mapseq/acquisition.json:   {len(mapseq_acq.specimen_id)} specimens")
+        print(f"  barseq/acquisition.json:   {len(barseq_acq.specimen_id)} specimens")
+        print(f"  gather_metadata_settings.json written to both modality folders")
 
     print(f"\nWrote {len(SUBJECTS)} subject(s) to {RESULTS_DIR}")
 

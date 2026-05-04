@@ -154,3 +154,6 @@ dmypy.json
 
 # Local capsule run output (not committed; canonical output lands in /results/ on Code Ocean)
 /local_results/
+
+# Agent / scratch context files
+/context.md

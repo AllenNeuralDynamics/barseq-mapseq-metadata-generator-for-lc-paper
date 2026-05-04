@@ -87,9 +87,40 @@ _BARSEQ_STREAM_NOTE = "Acquired by the Allen Institute for Brain Science BARseq 
 PROVENANCE_URL: Optional[str] = None  # e.g. "https://codeocean.allenneuraldynamics.org/capsule/<id>"
 
 # ---------------------------------------------------------------------------
+# gather_metadata JobSettings
+# ---------------------------------------------------------------------------
+# Project name used by the aind-metadata-mapper gather_metadata job to look
+# up funding sources and investigators from the AIND metadata service
+# (/api/v2/funding/{project_name} and /api/v2/investigators/{project_name}).
+# Must match the project name registered in that service exactly, otherwise
+# both fields come back empty.
+PROJECT_NAME: str = "Discovery-Neuromodulator circuit dynamics during foraging - Subproject 2 Molecular Anatomy Cell Types"
+
+_MAPSEQ_DATA_SUMMARY = (
+    "MAPseq projection mapping data for the locus coeruleus (LC) paper. "
+    "Brain sections were cut at the Allen Institute, chunked by brain region, "
+    "and shipped to Cold Spring Harbor Laboratory for sequencing. The asset "
+    "contains per-chunk barcode counts used to reconstruct projections from "
+    "LC neurons across the brain."
+)
+_BARSEQ_DATA_SUMMARY = (
+    "BARseq spatial sequencing data for the locus coeruleus (LC) paper. "
+    "LC sections were imaged in-house at the Allen Institute across gene-"
+    "sequencing (7 cycles), barcode-sequencing (15 cycles), and one "
+    "hybridization cycle. The asset contains a cell x gene x barcode table "
+    "registered to the Allen CCFv3."
+)
+
+# ---------------------------------------------------------------------------
 # Specimen-id pattern filters
 # ---------------------------------------------------------------------------
-_CHUNK_PATTERN = re.compile(r"_map\d{3}_\d{3}$")  # e.g. 780345_map001_001
+# MAPseq acquisition includes everything sent to CSHL for sequencing:
+#   * brain-region chunks (e.g. 780345_map001_001), and
+#   * the spinal cord (e.g. 780345_spinal).
+# The slide-level IDs (780345_map001 etc.) are intermediate products and
+# are excluded by the strict `type(detail) is Sectioning` check elsewhere
+# (those come from PlanarSectioning, which subclasses Sectioning).
+_MAPSEQ_OUTPUT_PATTERN = re.compile(r"(_map\d{3}_\d{3}|_spinal)$")
 _BAR_PATTERN = re.compile(r"_bar\d{3}$")          # e.g. 780345_bar001
 
 
@@ -239,15 +270,17 @@ def _collect_specimen_ids(
 
 
 def _mapseq_specimen_ids(procedures: Procedures) -> List[str]:
-    """Chunk-level MAPseq IDs (e.g. 780345_map001_001) — the brain-region pieces sent to CSHL.
+    """MAPseq specimen IDs — everything sent to CSHL for sequencing.
 
-    Filters strictly by `type(detail) is Sectioning` (not the PlanarSectioning
-    subclass) so the upstream slice IDs (e.g. 780345_map001) are excluded.
+    Includes the brain-region chunks (e.g. 780345_map001_001) and the spinal
+    cord (e.g. 780345_spinal). Filters strictly by `type(detail) is Sectioning`
+    (not the PlanarSectioning subclass) so the upstream slide IDs
+    (e.g. 780345_map001) are excluded.
     """
     return _collect_specimen_ids(
         procedures,
         type_predicate=lambda d: type(d) is Sectioning,
-        pattern=_CHUNK_PATTERN,
+        pattern=_MAPSEQ_OUTPUT_PATTERN,
     )
 
 
@@ -285,6 +318,33 @@ def build_mapseq_acquisition(
             )
         ],
     )
+
+
+def build_gather_metadata_settings(subject_id: str, modality: str) -> dict:
+    """Build a JobSettings dict for aind-metadata-mapper's gather_metadata job.
+
+    Written next to the per-modality acquisition.json so a downstream operator
+    can run gather_metadata locally to fetch subject.json and complete
+    data_description.json from the on-prem AIND metadata service.
+
+    `acquisition_start_time` is intentionally omitted — gather_metadata reads
+    it from the acquisition.json sitting in the same folder.
+    """
+    if modality == "MAPseq":
+        data_summary = _MAPSEQ_DATA_SUMMARY
+    elif modality == "BARseq":
+        data_summary = _BARSEQ_DATA_SUMMARY
+    else:
+        raise ValueError(f"Unknown modality: {modality}")
+    return {
+        "output_dir": ".",
+        "subject_id": subject_id,
+        "data_description_settings": {
+            "project_name": PROJECT_NAME,
+            "modalities": [modality],
+            "data_summary": data_summary,
+        },
+    }
 
 
 def build_barseq_acquisition(
