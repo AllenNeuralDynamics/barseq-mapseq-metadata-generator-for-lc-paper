@@ -14,7 +14,6 @@ to guarantee the two stay in sync:
 """
 
 import re
-from datetime import date
 from typing import List, Optional
 
 from aind_data_schema_models.brain_atlas import CCFv3
@@ -39,7 +38,7 @@ from _procedures_helpers import (
 )
 
 # ---------------------------------------------------------------------------
-# Sectioning constants (shared across subjects, sourced from PR #1763)
+# Sectioning constants (shared across subjects)
 # ---------------------------------------------------------------------------
 _MAPSEQ_FIRST_BATCH_SPAN_UM = 9800       # spread across plates 0-98
 _MAPSEQ_SECOND_BATCH_ORIGIN_UM = 11200   # plates 112+
@@ -49,10 +48,6 @@ _BARSEQ_START_UM = 9900                  # LC range begins here
 _BARSEQ_THICKNESS_UM = 20                # uniform spacing
 _SPINAL_THICKNESS_UM = 1000              # approximate
 
-# TODO: confirm actual sectioning dates with Polina Kosillo. Placeholder
-# matches PR #1763. Sectioning happened in-house at the Allen Institute
-# before tissue was shipped to CSHL.
-_SECTIONING_DATE = date(2024, 1, 1)
 _SECTIONING_EXPERIMENTERS = ["Polina Kosillo"]
 
 # ---------------------------------------------------------------------------
@@ -201,6 +196,7 @@ def _spinal(subject_id: str, cfg: dict) -> Sectioning:
 def build_procedures(subject_id: str, cfg: dict) -> Procedures:
     n_first = cfg["mapseq_first_batch_count"]
     n_second = cfg["mapseq_second_batch_count"]
+    sectioning_date = cfg["sectioning_date"]
     return Procedures(
         subject_id=subject_id,
         coordinate_system=AtlasLibrary.CCFv3_10um,
@@ -208,8 +204,8 @@ def build_procedures(subject_id: str, cfg: dict) -> Procedures:
             SpecimenProcedure(
                 procedure_type="Sectioning",
                 specimen_id=subject_id,
-                start_date=_SECTIONING_DATE,
-                end_date=_SECTIONING_DATE,
+                start_date=sectioning_date,
+                end_date=sectioning_date,
                 experimenters=_SECTIONING_EXPERIMENTERS,
                 procedure_details=[_mapseq_first_batch(subject_id, cfg)],
                 notes=f"MAPseq first batch: sections 1-{n_first} ({_MAPSEQ_THICKNESS_UM}um thick, partial slices)",
@@ -217,8 +213,8 @@ def build_procedures(subject_id: str, cfg: dict) -> Procedures:
             SpecimenProcedure(
                 procedure_type="Sectioning",
                 specimen_id=subject_id,
-                start_date=_SECTIONING_DATE,
-                end_date=_SECTIONING_DATE,
+                start_date=sectioning_date,
+                end_date=sectioning_date,
                 experimenters=_SECTIONING_EXPERIMENTERS,
                 procedure_details=[_barseq_lc(subject_id, cfg)],
                 notes=f"BARseq LC sections 1-{cfg['barseq_count']} ({_BARSEQ_THICKNESS_UM}um thick)",
@@ -226,8 +222,8 @@ def build_procedures(subject_id: str, cfg: dict) -> Procedures:
             SpecimenProcedure(
                 procedure_type="Sectioning",
                 specimen_id=subject_id,
-                start_date=_SECTIONING_DATE,
-                end_date=_SECTIONING_DATE,
+                start_date=sectioning_date,
+                end_date=sectioning_date,
                 experimenters=_SECTIONING_EXPERIMENTERS,
                 procedure_details=[_mapseq_second_batch(subject_id, cfg)],
                 notes=f"MAPseq second batch: sections {n_first + 1}-{n_first + n_second} ({_MAPSEQ_THICKNESS_UM}um thick, partial slices)",
@@ -235,13 +231,13 @@ def build_procedures(subject_id: str, cfg: dict) -> Procedures:
             SpecimenProcedure(
                 procedure_type="Sectioning",
                 specimen_id=subject_id,
-                start_date=_SECTIONING_DATE,
-                end_date=_SECTIONING_DATE,
+                start_date=sectioning_date,
+                end_date=sectioning_date,
                 experimenters=_SECTIONING_EXPERIMENTERS,
                 procedure_details=[_spinal(subject_id, cfg)],
                 notes="MAPseq spinal cord sections, size is approximate",
             ),
-            *generate_mapseq_slide_chunks(subject_id),
+            *generate_mapseq_slide_chunks(subject_id, sectioning_date),
         ],
     )
 

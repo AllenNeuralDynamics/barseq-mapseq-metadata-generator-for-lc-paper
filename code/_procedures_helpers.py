@@ -93,7 +93,7 @@ def _load_slide_regions() -> Dict[int, dict]:
     return slides
 
 
-def generate_mapseq_slide_chunks(specimen_id: str) -> List[SpecimenProcedure]:
+def generate_mapseq_slide_chunks(specimen_id: str, sectioning_date: date) -> List[SpecimenProcedure]:
     """Generate specimen procedures for the MAPseq slide chunking based on _SLIDE_REGIONS."""
     slides = _load_slide_regions()
     procedures = []
@@ -127,8 +127,8 @@ def generate_mapseq_slide_chunks(specimen_id: str) -> List[SpecimenProcedure]:
             SpecimenProcedure(
                 procedure_type="Sectioning",
                 specimen_id=input_ids,
-                start_date=date(2024, 1, 1),
-                end_date=date(2024, 1, 1),
+                start_date=sectioning_date,
+                end_date=sectioning_date,
                 experimenters=["Polina Kosillo"],
                 procedure_details=[Sectioning(sections=output_sections)],
                 notes=note,
