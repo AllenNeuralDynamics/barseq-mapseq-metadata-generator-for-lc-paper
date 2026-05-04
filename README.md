@@ -10,7 +10,7 @@ includes a `notes` field that points back to a fixed Code Ocean release of
 this capsule, so a future reader can reproduce the exact
 generated file by rerunning the linked release.
 
-## What it produces
+## Overview
 
 Running the capsule writes these files to `/results/`:
 
