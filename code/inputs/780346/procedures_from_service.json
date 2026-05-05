@@ -1,0 +1,237 @@
+{
+   "object_type": "Procedures",
+   "describedBy": "https://raw.githubusercontent.com/AllenNeuralDynamics/aind-data-schema/main/src/aind_data_schema/core/procedures.py",
+   "schema_version": "2.0.34",
+   "subject_id": "780346",
+   "subject_procedures": [
+      {
+         "object_type": "Surgery",
+         "protocol_id": "dx.doi.org/10.17504/protocols.io.kqdg392o7g25/v2",
+         "start_date": "2024-12-10",
+         "experimenters": [
+            "NSB-573"
+         ],
+         "ethics_review_id": "2201",
+         "animal_weight_prior": 17.6,
+         "animal_weight_post": 17.6,
+         "weight_unit": "gram",
+         "anaesthesia": {
+            "object_type": "Anaesthetic",
+            "anaesthetic_type": "isoflurane",
+            "duration": 60.0,
+            "duration_unit": "minute",
+            "level": 1.5
+         },
+         "workstation_id": "SWS 3",
+         "coordinate_system": {
+            "object_type": "Coordinate system",
+            "name": "BREGMA_ARID",
+            "origin": "Bregma",
+            "axes": [
+               {
+                  "object_type": "Axis",
+                  "name": "AP",
+                  "direction": "Posterior_to_anterior"
+               },
+               {
+                  "object_type": "Axis",
+                  "name": "ML",
+                  "direction": "Left_to_right"
+               },
+               {
+                  "object_type": "Axis",
+                  "name": "SI",
+                  "direction": "Superior_to_inferior"
+               },
+               {
+                  "object_type": "Axis",
+                  "name": "Depth",
+                  "direction": "Up_to_down"
+               }
+            ],
+            "axis_unit": "millimeter"
+         },
+         "measured_coordinates": null,
+         "procedures": [
+            {
+               "object_type": "Brain injection",
+               "injection_materials": [
+                  {
+                     "object_type": "Viral material",
+                     "name": "Sindbis GFP barcode library",
+                     "tars_identifiers": null,
+                     "addgene_id": null,
+                     "titer": 10000000000000,
+                     "titer_unit": "gc/mL"
+                  }
+               ],
+               "targeted_structure": null,
+               "relative_position": [
+                  "Right"
+               ],
+               "dynamics": [
+                  {
+                     "object_type": "Injection dynamics",
+                     "profile": "Bolus",
+                     "volume": 150.0,
+                     "volume_unit": "nanoliter",
+                     "duration": null,
+                     "duration_unit": null,
+                     "injection_current": null,
+                     "injection_current_unit": null,
+                     "alternating_current": null
+                  },
+                  {
+                     "object_type": "Injection dynamics",
+                     "profile": "Bolus",
+                     "volume": 150.0,
+                     "volume_unit": "nanoliter",
+                     "duration": null,
+                     "duration_unit": null,
+                     "injection_current": null,
+                     "injection_current_unit": null,
+                     "alternating_current": null
+                  }
+               ],
+               "protocol_id": null,
+               "coordinate_system_name": "BREGMA_ARID",
+               "coordinates": [
+                  [
+                     {
+                        "object_type": "Translation",
+                        "translation": [
+                           -5.2,
+                           0.85,
+                           0.0,
+                           -3.2
+                        ]
+                     },
+                     {
+                        "object_type": "Rotation",
+                        "angles": [
+                           0.0,
+                           0.0,
+                           0.0,
+                           0.0
+                        ],
+                        "angles_unit": "degrees"
+                     }
+                  ],
+                  [
+                     {
+                        "object_type": "Translation",
+                        "translation": [
+                           -5.2,
+                           0.85,
+                           0.0,
+                           -2.9
+                        ]
+                     },
+                     {
+                        "object_type": "Rotation",
+                        "angles": [
+                           0.0,
+                           0.0,
+                           0.0,
+                           0.0
+                        ],
+                        "angles_unit": "degrees"
+                     }
+                  ]
+               ]
+            },
+            {
+               "object_type": "Brain injection",
+               "injection_materials": [
+                  {
+                     "object_type": "Viral material",
+                     "name": "Sindbis GFP barcode library",
+                     "tars_identifiers": null,
+                     "addgene_id": null,
+                     "titer": 10000000000000,
+                     "titer_unit": "gc/mL"
+                  }
+               ],
+               "targeted_structure": null,
+               "relative_position": [
+                  "Left"
+               ],
+               "dynamics": [
+                  {
+                     "object_type": "Injection dynamics",
+                     "profile": "Bolus",
+                     "volume": 150.0,
+                     "volume_unit": "nanoliter",
+                     "duration": null,
+                     "duration_unit": null,
+                     "injection_current": null,
+                     "injection_current_unit": null,
+                     "alternating_current": null
+                  },
+                  {
+                     "object_type": "Injection dynamics",
+                     "profile": "Bolus",
+                     "volume": 150.0,
+                     "volume_unit": "nanoliter",
+                     "duration": null,
+                     "duration_unit": null,
+                     "injection_current": null,
+                     "injection_current_unit": null,
+                     "alternating_current": null
+                  }
+               ],
+               "protocol_id": null,
+               "coordinate_system_name": "BREGMA_ARID",
+               "coordinates": [
+                  [
+                     {
+                        "object_type": "Translation",
+                        "translation": [
+                           -5.2,
+                           -0.85,
+                           0.0,
+                           -3.2
+                        ]
+                     },
+                     {
+                        "object_type": "Rotation",
+                        "angles": [
+                           0.0,
+                           0.0,
+                           0.0,
+                           0.0
+                        ],
+                        "angles_unit": "degrees"
+                     }
+                  ],
+                  [
+                     {
+                        "object_type": "Translation",
+                        "translation": [
+                           -5.2,
+                           -0.85,
+                           0.0,
+                           -2.9
+                        ]
+                     },
+                     {
+                        "object_type": "Rotation",
+                        "angles": [
+                           0.0,
+                           0.0,
+                           0.0,
+                           0.0
+                        ],
+                        "angles_unit": "degrees"
+                     }
+                  ]
+               ]
+            }
+         ],
+         "notes": null
+      }
+   ],
+   "specimen_procedures": [],
+   "coordinate_system": null,
+   "notes": null
+}

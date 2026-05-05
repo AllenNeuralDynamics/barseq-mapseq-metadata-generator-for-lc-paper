@@ -4,39 +4,41 @@ Iterates the SUBJECTS dict, builds Procedures + MAPseq + BARseq Acquisition
 objects for each, validates each via JSON round-trip, and writes the JSON
 files to /results/<subject_id>/<modality>/.
 
-The same procedures.json is written into both modality folders — the brain
-was sectioned once and the Procedures object is per-subject, not per-modality.
-Repeating it lets each modality folder be uploaded as a self-contained unit.
+For each (subject, modality), the result folder ends up self-contained with
+the four metadata files needed to upload as a DocDB data asset:
 
-Each modality folder also receives a gather_metadata_settings.json — the
-JobSettings file consumed by aind-metadata-mapper's gather_metadata job to
-fetch subject.json and complete data_description.json from the AIND on-prem
-metadata service. See README.md for the local invocation.
+    procedures.json          (locally-built sectioning + service-fetched injections)
+    acquisition.json         (modality-specific)
+    subject.json             (broadcast — modality-independent, fetched from service)
+    data_description.json    (modality-specific, prebuilt by prefetch_inputs.py)
+
+`procedures.json` and `subject.json` are duplicated between the mapseq/ and
+barseq/ folders for a given subject because each modality folder is meant
+to ship as a stand-alone bundle.
 
 Output layout (per subject):
-    <subject>/mapseq/procedures.json
-    <subject>/mapseq/acquisition.json
-    <subject>/mapseq/gather_metadata_settings.json
-    <subject>/barseq/procedures.json
-    <subject>/barseq/acquisition.json
-    <subject>/barseq/gather_metadata_settings.json
+    <subject>/mapseq/{procedures,acquisition,subject,data_description}.json
+    <subject>/barseq/{procedures,acquisition,subject,data_description}.json
 """
 
-import json
 import os
 from pathlib import Path
 
 from aind_data_schema.core.acquisition import Acquisition
+from aind_data_schema.core.data_description import DataDescription
 from aind_data_schema.core.procedures import Procedures
+from aind_data_schema.core.subject import Subject
 
 from acquisition_generator import build_acquisition
-from gather_metadata_settings_generator import build_gather_metadata_settings
 from procedures_generator import build_procedures
 from subjects import SUBJECTS
 
 # Code Ocean mounts /results/ as the canonical output location. Override
 # via CO_RESULTS_DIR for local testing.
 RESULTS_DIR = Path(os.environ.get("CO_RESULTS_DIR", "/results"))
+
+# Prefetched metadata committed to the repo. See prefetch_inputs.py.
+INPUTS_DIR = Path(__file__).parent / "inputs"
 
 
 def _validate_roundtrip(model_obj, model_cls):
@@ -56,17 +58,35 @@ def _validate_roundtrip(model_obj, model_cls):
     return model_cls.model_validate_json(model_obj.model_dump_json())
 
 
+def _load_inputs(subject_id: str):
+    """Load the prefetched inputs for one subject.
+
+    Args:
+        subject_id: Subject ID (e.g. "780345").
+
+    Returns:
+        Tuple of (Subject, Procedures, DataDescription, DataDescription) where
+        the two DataDescription instances are MAPseq and BARseq in that order.
+        The Procedures returned here is the *service* version — it carries the
+        injections we need to merge into the locally-built procedures.
+    """
+    subj_dir = INPUTS_DIR / subject_id
+    subject = Subject.model_validate_json((subj_dir / "subject.json").read_text())
+    service_proc = Procedures.model_validate_json((subj_dir / "procedures_from_service.json").read_text())
+    mapseq_dd = DataDescription.model_validate_json((subj_dir / "mapseq" / "data_description.json").read_text())
+    barseq_dd = DataDescription.model_validate_json((subj_dir / "barseq" / "data_description.json").read_text())
+    return subject, service_proc, mapseq_dd, barseq_dd
+
+
 def run() -> None:
     """Build and write the per-modality metadata bundle for every subject in SUBJECTS.
 
-    For each subject in `subjects.SUBJECTS`, builds the Procedures and the two
-    Acquisitions (MAPseq, BARseq), validates each via JSON round-trip, and writes
-    a self-contained folder per modality:
-
-        <RESULTS_DIR>/<subject_id>/{mapseq,barseq}/
-            procedures.json                 (identical between mapseq/ and barseq/)
-            acquisition.json                (modality-specific)
-            gather_metadata_settings.json   (consumed by the local gather_metadata step)
+    For each subject, loads its prefetched inputs (subject.json, the service
+    procedures.json containing injections, and a data_description.json per
+    modality), builds the locally-generated sectioning Procedures and the two
+    Acquisitions, merges the service's `subject_procedures` into the local
+    procedures, validates each via JSON round-trip, and writes the four
+    metadata files into each modality folder.
 
     Reads `CO_RESULTS_DIR` from the environment to override the default `/results`.
     Has no return value; results are observed via files written under `RESULTS_DIR`
@@ -79,24 +99,29 @@ def run() -> None:
         mapseq_dir.mkdir(parents=True, exist_ok=True)
         barseq_dir.mkdir(parents=True, exist_ok=True)
 
-        procedures = _validate_roundtrip(build_procedures(subject_id, cfg), Procedures)
+        subject, service_proc, mapseq_dd, barseq_dd = _load_inputs(subject_id)
+
+        local_proc = build_procedures(subject_id, cfg)
+        merged_proc = local_proc.model_copy(
+            update={"subject_procedures": service_proc.subject_procedures}
+        )
+
+        procedures = _validate_roundtrip(merged_proc, Procedures)
         mapseq_acq = _validate_roundtrip(build_acquisition(subject_id, cfg, procedures, "MAPseq"), Acquisition)
         barseq_acq = _validate_roundtrip(build_acquisition(subject_id, cfg, procedures, "BARseq"), Acquisition)
 
-        procedures.write_standard_file(output_directory=mapseq_dir)
-        procedures.write_standard_file(output_directory=barseq_dir)
+        for d in (mapseq_dir, barseq_dir):
+            procedures.write_standard_file(output_directory=d)
+            subject.write_standard_file(output_directory=d)
+        mapseq_dd.write_standard_file(output_directory=mapseq_dir)
+        barseq_dd.write_standard_file(output_directory=barseq_dir)
         mapseq_acq.write_standard_file(output_directory=mapseq_dir)
         barseq_acq.write_standard_file(output_directory=barseq_dir)
 
-        mapseq_settings = build_gather_metadata_settings(subject_id, "MAPseq")
-        barseq_settings = build_gather_metadata_settings(subject_id, "BARseq")
-        (mapseq_dir / "gather_metadata_settings.json").write_text(json.dumps(mapseq_settings, indent=3))
-        (barseq_dir / "gather_metadata_settings.json").write_text(json.dumps(barseq_settings, indent=3))
-
-        print(f"  procedures.json:           {len(procedures.specimen_procedures)} specimen procedures (written to both modality folders)")
-        print(f"  mapseq/acquisition.json:   {len(mapseq_acq.specimen_id)} specimens")
-        print(f"  barseq/acquisition.json:   {len(barseq_acq.specimen_id)} specimens")
-        print(f"  gather_metadata_settings.json written to both modality folders")
+        print(f"  procedures.json:         {len(procedures.subject_procedures)} subject + {len(procedures.specimen_procedures)} specimen procedures")
+        print(f"  mapseq/acquisition.json: {len(mapseq_acq.specimen_id)} specimens")
+        print(f"  barseq/acquisition.json: {len(barseq_acq.specimen_id)} specimens")
+        print(f"  subject.json + data_description.json broadcast to both modality folders")
 
     print(f"\nWrote {len(SUBJECTS)} subject(s) to {RESULTS_DIR}")
 

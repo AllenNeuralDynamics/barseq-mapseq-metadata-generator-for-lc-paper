@@ -1,0 +1,37 @@
+{
+   "object_type": "Subject",
+   "describedBy": "https://raw.githubusercontent.com/AllenNeuralDynamics/aind-data-schema/main/src/aind_data_schema/core/subject.py",
+   "schema_version": "2.0.13",
+   "subject_id": "780346",
+   "subject_details": {
+      "object_type": "Mouse subject",
+      "sex": "Female",
+      "date_of_birth": "2024-10-08",
+      "strain": {
+         "name": "Unknown",
+         "species": "Mus musculus",
+         "registry": null,
+         "registry_identifier": null
+      },
+      "species": {
+         "name": "Mus musculus",
+         "common_name": "House mouse",
+         "registry": "National Center for Biotechnology Information (NCBI)",
+         "registry_identifier": "NCBI:txid10090"
+      },
+      "alleles": [],
+      "genotype": "wt/wt",
+      "breeding_info": null,
+      "wellness_reports": [],
+      "housing": null,
+      "source": {
+         "name": "Unknown",
+         "abbreviation": "UNKNOWN",
+         "registry": null,
+         "registry_identifier": null
+      },
+      "restrictions": null,
+      "rrid": null
+   },
+   "notes": null
+}
