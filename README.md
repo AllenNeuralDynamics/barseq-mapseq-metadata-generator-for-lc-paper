@@ -125,7 +125,7 @@ code/
 ├── run_capsule.py                            # orchestrator: iterates SUBJECTS, calls generators, writes JSONs
 ├── subjects.py                               # SUBJECTS dict — edit to add or change a subject
 ├── procedures_generator.py                   # build_procedures + slide-region chunking + specimen-id collectors
-├── acquisition_generator.py                  # build_mapseq_acquisition / build_barseq_acquisition + acquisition notes
+├── acquisition_generator.py                  # build_acquisition + per-modality config (notes, protocol IDs, modality enum)
 ├── gather_metadata_settings_generator.py     # build_gather_metadata_settings + PROJECT_NAME, data summaries
 ├── provenance.py                             # PROVENANCE_URL + augment_notes (shared by procedures + acquisitions)
 └── _procedures_helpers.py                    # generic sectioning utilities (verbatim copy from PR #1763)
