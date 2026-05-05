@@ -9,7 +9,7 @@ trace each artifact back to the exact code that produced it.
 from typing import Optional
 
 # e.g. "https://codeocean.allenneuraldynamics.org/capsule/<id>"
-PROVENANCE_URL: Optional[str] = None
+PROVENANCE_URL: Optional[str] = "https://codeocean.allenneuraldynamics.org/capsule/2979188"
 
 
 def augment_notes(notes: str) -> str:
