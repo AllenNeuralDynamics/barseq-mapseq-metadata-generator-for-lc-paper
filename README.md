@@ -12,45 +12,50 @@ generated file by rerunning the linked release.
 
 ## Overview
 
-Running the capsule writes these files to `/results/`:
+The capsule produces **one data asset per (subject × modality) combo**, so
+**four runs total** to publish all four assets. Each Reproducible Run
+takes `--subject-id` and `--modality` parameters (set via the Code Ocean
+App Panel) and writes a single flat `/results/` folder that contains both
+the raw data (copied from the attached input asset) and freshly-generated
+metadata:
 
 ```
 results/
-├── 780345/
-│   ├── mapseq/
-│   │   ├── procedures.json           # sectioning (locally built) + injections (from service)
-│   │   ├── acquisition.json          # MAPseq acquisition (chunk-level specimen IDs)
-│   │   ├── subject.json              # broadcast — modality-independent
-│   │   └── data_description.json     # MAPseq data description
-│   └── barseq/
-│       ├── procedures.json           # identical copy of the procedures above
-│       ├── acquisition.json          # BARseq acquisition (section-level specimen IDs)
-│       ├── subject.json              # identical copy of the subject above
-│       └── data_description.json     # BARseq data description
-└── 780346/
-    └── (same shape)
+├── procedures.json           # sectioning (locally built) + injections (from service)
+├── acquisition.json          # modality-specific
+├── subject.json              # passthrough from the metadata service
+├── data_description.json     # modality-specific (name field = canonical asset name)
+└── <Modality>/               # raw data, copied verbatim from /data/<asset>/<Modality>/
 ```
 
-After this capsule runs, each modality folder is a self-contained, ready-
-to-upload bundle of all four metadata files DocDB needs.
+Each `/results/` folder becomes one Code Ocean data asset with the
+canonical AIND name `<modality>_<subject>_<acquisition_start>`:
 
-`procedures.json` is **identical** between the `mapseq/` and `barseq/`
-folders for a given subject — the brain was sectioned once and both
-modalities used the same slides. It covers MAPseq batches (300 µm partial
-slices, plates 0–98 and 112–132), BARseq LC sections (20 µm uniform, plates
-99–112), the spinal cord, the per-slide MAPseq chunking, and the upstream
-brain injections (merged in from the metadata service's procedures
-endpoint, since this capsule does not generate injection metadata).
-`subject.json` is also identical between the two folders.
+| Run | --subject-id | --modality | Resulting asset name                          |
+|-----|--------------|------------|-----------------------------------------------|
+| 1   | 780345       | MAPseq     | `mapseq_780345_2025-03-24_12-00-00`           |
+| 2   | 780345       | BARseq     | `barseq_780345_2025-02-24_00-00-00`           |
+| 3   | 780346       | MAPseq     | `mapseq_780346_2025-07-23_12-00-00`           |
+| 4   | 780346       | BARseq     | `barseq_780346_2025-06-13_16-39-31`           |
 
-The two `acquisition.json` files are modality-specific and have different
-specimen-id semantics:
+The `name` field in each `data_description.json` matches the asset name in
+the table above and is what Code Ocean should use when promoting `/results/`
+to a data asset.
+
+`procedures.json` is identical across all four runs of a given subject —
+the brain was sectioned once and both modalities used the same slides. It
+covers MAPseq batches (300 µm partial slices, plates 0–98 and 112–132),
+BARseq LC sections (20 µm uniform, plates 99–112), the spinal cord, the
+per-slide MAPseq chunking, and the upstream brain injections (merged in
+from the metadata service's procedures endpoint).
+
+The two `acquisition.json` flavors have different specimen-id semantics:
 
 * **MAPseq** acquisition `specimen_id` is a flat list of everything sent to
   Cold Spring Harbor Laboratory for sequencing: the brain-region chunks
   extracted from each slide (e.g. `780345_map001_001`) plus the spinal cord
-  (e.g. `780345_spinal`). All of these are outputs of `Sectioning`
-  sub-procedures inside the `Procedures` object.
+  (e.g. `780345_spinal`). All are outputs of `Sectioning` sub-procedures
+  inside the `Procedures` object.
 * **BARseq** acquisition `specimen_id` is a flat list of the LC section
   outputs from the `PlanarSectioning` sub-procedure (e.g. `780345_bar001`).
   These are the slides imaged in-house at the Allen Institute.
@@ -99,29 +104,51 @@ project name registered in the metadata service exactly, otherwise
 `funding_source` and `investigators` come back empty in the resulting
 `data_description.json`.
 
-### Step 2: run the capsule
+### Step 2: run the capsule (four times)
 
 #### On Code Ocean (the canonical release path)
 
-Click **Reproducible Run**. Output lands in `/results/`. After this
-finishes, the four metadata files for each (subject × modality) are ready
-to hand off for upload to S3 / DocDB.
+For each row in the table above, attach the input data asset matching the
+subject (the `780345_*` or `780346_*` asset that contains the `BARseq/`
+and `MAPseq/` subfolders), set the App Panel parameters to that row's
+`--subject-id` and `--modality`, and click **Reproducible Run**. Each run
+produces a `/results/` folder that Code Ocean turns into a data asset
+named per the table.
+
+After all four runs are done, hand the four data asset references off to
+whoever owns moving them from the internal Code Ocean bucket to
+`aind-open-data`.
 
 #### Locally (for development or sanity checks)
 
 ```bash
 cd code
-CO_RESULTS_DIR=../local_results uv run --with git+https://github.com/AllenNeuralDynamics/aind-data-schema.git@dev python run_capsule.py
+CO_RESULTS_DIR=../local_results uv run --with git+https://github.com/AllenNeuralDynamics/aind-data-schema.git@dev \
+    python run_capsule.py --subject-id 780345 --modality MAPseq
 ```
 
-(`CO_RESULTS_DIR` overrides the default `/results/` path.)
+Each invocation writes one combo's bundle to `CO_RESULTS_DIR`. Each run
+clobbers the previous one, so set `CO_RESULTS_DIR` to a per-combo path if
+you want to keep all four locally:
+
+```bash
+for combo in "780345 MAPseq" "780345 BARseq" "780346 MAPseq" "780346 BARseq"; do
+  read s m <<< "$combo"
+  CO_RESULTS_DIR=../local_results/${m,,}_${s} uv run --with git+https://github.com/AllenNeuralDynamics/aind-data-schema.git@dev \
+      python run_capsule.py --subject-id $s --modality $m
+done
+```
+
+The capsule warns and skips the raw-data copy if `/data/<subject>_*` isn't
+present, so local runs (without the input asset mounted) still produce
+valid metadata bundles — just without the raw data alongside.
 
 ## Project layout
 
 ```
 code/
 ├── run                          # bash entry, called by Code Ocean Reproducible Run
-├── run_capsule.py               # orchestrator: iterates SUBJECTS, calls generators, writes JSONs
+├── run_capsule.py               # entry point — takes --subject-id/--modality, writes one bundle to /results/
 ├── subjects.py                  # SUBJECTS dict — edit to add or change a subject
 ├── procedures_generator.py      # build_procedures + slide-region chunking + specimen-id collectors
 ├── acquisition_generator.py     # build_acquisition + per-modality config (notes, protocol IDs, modality enum)

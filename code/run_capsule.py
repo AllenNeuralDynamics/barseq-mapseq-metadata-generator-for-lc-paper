@@ -1,27 +1,30 @@
 """Top-level run script.
 
-Iterates the SUBJECTS dict, builds Procedures + MAPseq + BARseq Acquisition
-objects for each, validates each via JSON round-trip, and writes the JSON
-files to /results/<subject_id>/<modality>/.
+Builds the metadata bundle for one (subject, modality) and writes it to
+/results/, alongside a copy of the raw modality folder pulled from the
+attached input data asset. Each Reproducible Run on Code Ocean produces
+one /results/ folder, which becomes one data asset; the four (subject,
+modality) combos require four runs.
 
-For each (subject, modality), the result folder ends up self-contained with
-the four metadata files needed to upload as a DocDB data asset:
+Parameters (passed from the Code Ocean App Panel as CLI args):
+    --subject-id   one of the keys in SUBJECTS (e.g. "780345")
+    --modality     "MAPseq" or "BARseq"
 
-    procedures.json          (locally-built sectioning + service-fetched injections)
-    acquisition.json         (modality-specific)
-    subject.json             (broadcast — modality-independent, fetched from service)
-    data_description.json    (modality-specific, prebuilt by prefetch_inputs.py)
+Output layout (/results/):
+    procedures.json          locally-built sectioning + service injections
+    acquisition.json         modality-specific
+    subject.json             passthrough from the metadata service (via inputs/)
+    data_description.json    modality-specific, prebuilt by prefetch_inputs.py
+    <Modality>/              raw data, copied verbatim from the input asset
 
-`procedures.json` and `subject.json` are duplicated between the mapseq/ and
-barseq/ folders for a given subject because each modality folder is meant
-to ship as a stand-alone bundle.
-
-Output layout (per subject):
-    <subject>/mapseq/{procedures,acquisition,subject,data_description}.json
-    <subject>/barseq/{procedures,acquisition,subject,data_description}.json
+The fresh data_description.json's `name` field is the canonical AIND data
+asset name (e.g. `mapseq_780345_2025-03-24_12-00-00`). Code Ocean should
+use that when promoting /results/ to a data asset.
 """
 
+import argparse
 import os
+import shutil
 from pathlib import Path
 
 from aind_data_schema.core.acquisition import Acquisition
@@ -37,6 +40,10 @@ from subjects import SUBJECTS
 # Code Ocean mounts /results/ as the canonical output location. Override
 # via CO_RESULTS_DIR for local testing.
 RESULTS_DIR = Path(os.environ.get("CO_RESULTS_DIR", "/results"))
+
+# Code Ocean mounts attached input data assets under /data/. Override via
+# CO_DATA_DIR for local testing if you've staged data somewhere else.
+DATA_DIR = Path(os.environ.get("CO_DATA_DIR", "/data"))
 
 # Prefetched metadata committed to the repo. See prefetch_inputs.py.
 INPUTS_DIR = Path(__file__).parent / "inputs"
@@ -59,85 +66,155 @@ def _validate_roundtrip(model_obj, model_cls):
     return model_cls.model_validate_json(model_obj.model_dump_json())
 
 
-def _load_inputs(subject_id: str):
-    """Load the prefetched inputs for one subject.
+def _load_inputs(subject_id: str, modality: str):
+    """Load the prefetched inputs needed for one (subject, modality).
+
+    Args:
+        subject_id: Subject ID (e.g. "780345").
+        modality: "MAPseq" or "BARseq".
+
+    Returns:
+        Tuple of (Subject, Procedures, DataDescription). The Procedures
+        returned here is the *service* version — it carries the injections
+        we need to merge into the locally-built procedures.
+    """
+    subj_dir = INPUTS_DIR / subject_id
+    subject = Subject.model_validate_json((subj_dir / "subject.json").read_text())
+    service_proc = Procedures.model_validate_json((subj_dir / "procedures_from_service.json").read_text())
+    dd = DataDescription.model_validate_json((subj_dir / modality.lower() / "data_description.json").read_text())
+    return subject, service_proc, dd
+
+
+def _find_input_asset(subject_id: str) -> Path | None:
+    """Find the attached input data asset for one subject.
+
+    Code Ocean mounts each attached data asset as `/data/<asset_name>/`. We
+    glob `/data/<subject_id>_*` to find the one matching this subject (the
+    timestamp suffix varies between assets).
 
     Args:
         subject_id: Subject ID (e.g. "780345").
 
     Returns:
-        Tuple of (Subject, Procedures, DataDescription, DataDescription) where
-        the two DataDescription instances are MAPseq and BARseq in that order.
-        The Procedures returned here is the *service* version — it carries the
-        injections we need to merge into the locally-built procedures.
+        The matching `/data/<asset>/` path, or None if no asset is attached
+        (e.g. when running locally without /data/ mounted).
+
+    Raises:
+        RuntimeError: if more than one asset matches.
     """
-    subj_dir = INPUTS_DIR / subject_id
-    subject = Subject.model_validate_json((subj_dir / "subject.json").read_text())
-    service_proc = Procedures.model_validate_json((subj_dir / "procedures_from_service.json").read_text())
-    mapseq_dd = DataDescription.model_validate_json((subj_dir / "mapseq" / "data_description.json").read_text())
-    barseq_dd = DataDescription.model_validate_json((subj_dir / "barseq" / "data_description.json").read_text())
-    return subject, service_proc, mapseq_dd, barseq_dd
-
-
-def run() -> None:
-    """Build and write the per-modality metadata bundle for every subject in SUBJECTS.
-
-    For each subject, loads its prefetched inputs (subject.json, the service
-    procedures.json containing injections, and a data_description.json per
-    modality), builds the locally-generated sectioning Procedures and the two
-    Acquisitions, merges the service's `subject_procedures` into the local
-    procedures, validates each via JSON round-trip, and writes the four
-    metadata files into each modality folder.
-
-    Reads `CO_RESULTS_DIR` from the environment to override the default `/results`.
-    Has no return value; results are observed via files written under `RESULTS_DIR`
-    and a per-subject summary printed to stdout.
-    """
-    for subject_id, cfg in SUBJECTS.items():
-        print(f"=== {subject_id} ===")
-        mapseq_dir = RESULTS_DIR / subject_id / "mapseq"
-        barseq_dir = RESULTS_DIR / subject_id / "barseq"
-        mapseq_dir.mkdir(parents=True, exist_ok=True)
-        barseq_dir.mkdir(parents=True, exist_ok=True)
-
-        subject, service_proc, mapseq_dd, barseq_dd = _load_inputs(subject_id)
-
-        local_proc = build_procedures(subject_id, cfg)
-        merged_proc = local_proc.model_copy(
-            update={"subject_procedures": service_proc.subject_procedures}
+    matches = sorted(DATA_DIR.glob(f"{subject_id}_*"))
+    if not matches:
+        return None
+    if len(matches) > 1:
+        raise RuntimeError(
+            f"Multiple input assets matching {subject_id}_* in {DATA_DIR}: {matches}. "
+            f"Expected exactly one."
         )
+    return matches[0]
 
-        procedures = _validate_roundtrip(merged_proc, Procedures)
-        mapseq_acq = _validate_roundtrip(build_acquisition(subject_id, cfg, procedures, "MAPseq"), Acquisition)
-        barseq_acq = _validate_roundtrip(build_acquisition(subject_id, cfg, procedures, "BARseq"), Acquisition)
 
-        # Stamp the provenance URL onto every artifact this capsule actually
-        # generates or assembles, so any downstream reader can trace it back
-        # to the code that produced it. subject.json is intentionally
-        # excluded — that's a passthrough from the metadata service, not
-        # something this capsule authored. DataDescription has no `notes`
-        # field, so we augment `data_summary` for those.
-        procedures.notes = augment_notes(procedures.notes)
-        mapseq_acq.notes = augment_notes(mapseq_acq.notes)
-        barseq_acq.notes = augment_notes(barseq_acq.notes)
-        mapseq_dd.data_summary = augment_notes(mapseq_dd.data_summary)
-        barseq_dd.data_summary = augment_notes(barseq_dd.data_summary)
+def _copy_modality_data(asset_path: Path, modality: str, results_dir: Path) -> None:
+    """Copy the chosen modality's raw-data folder from the input asset into /results/.
 
-        for d in (mapseq_dir, barseq_dir):
-            procedures.write_standard_file(output_directory=d)
-            subject.write_standard_file(output_directory=d)
-        mapseq_dd.write_standard_file(output_directory=mapseq_dir)
-        barseq_dd.write_standard_file(output_directory=barseq_dir)
-        mapseq_acq.write_standard_file(output_directory=mapseq_dir)
-        barseq_acq.write_standard_file(output_directory=barseq_dir)
+    Args:
+        asset_path: Root of the attached input asset (e.g. `/data/780345_2025-02-20_00-00-00`).
+        modality: "MAPseq" or "BARseq" — must match a subdirectory of `asset_path`.
+        results_dir: Destination root (typically /results/). The modality folder
+            is copied as `<results_dir>/<modality>/`.
 
-        print(f"  procedures.json:         {len(procedures.subject_procedures)} subject + {len(procedures.specimen_procedures)} specimen procedures")
-        print(f"  mapseq/acquisition.json: {len(mapseq_acq.specimen_id)} specimens")
-        print(f"  barseq/acquisition.json: {len(barseq_acq.specimen_id)} specimens")
-        print(f"  subject.json + data_description.json broadcast to both modality folders")
+    Raises:
+        RuntimeError: if the modality subfolder doesn't exist in the input asset.
+    """
+    src = asset_path / modality
+    if not src.is_dir():
+        raise RuntimeError(f"Modality folder {src} does not exist in input asset")
+    dst = results_dir / modality
+    print(f"  copying {src} -> {dst} ...")
+    shutil.copytree(src, dst)
 
-    print(f"\nWrote {len(SUBJECTS)} subject(s) to {RESULTS_DIR}")
+
+def _parse_args() -> argparse.Namespace:
+    """Parse the CLI args wired to Code Ocean App Panel parameters.
+
+    Returns:
+        argparse.Namespace with `subject_id` and `modality` attributes.
+    """
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument(
+        "--subject-id",
+        required=True,
+        choices=sorted(SUBJECTS.keys()),
+        help="Subject ID — must be a key in SUBJECTS.",
+    )
+    parser.add_argument(
+        "--modality",
+        required=True,
+        choices=["MAPseq", "BARseq"],
+        help="Modality to build the bundle for.",
+    )
+    return parser.parse_args()
+
+
+def run(subject_id: str, modality: str) -> None:
+    """Build and write the metadata bundle for one (subject, modality).
+
+    Args:
+        subject_id: Subject ID (must be a key in `SUBJECTS`).
+        modality: "MAPseq" or "BARseq".
+
+    Reads `CO_RESULTS_DIR` and `CO_DATA_DIR` from the environment to override
+    the default `/results` and `/data` paths. Has no return value; results
+    are observed via files written under `RESULTS_DIR` and a summary printed
+    to stdout.
+    """
+    cfg = SUBJECTS[subject_id]
+    print(f"=== {subject_id} {modality} ===")
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    subject, service_proc, dd = _load_inputs(subject_id, modality)
+
+    local_proc = build_procedures(subject_id, cfg)
+    merged_proc = local_proc.model_copy(
+        update={"subject_procedures": service_proc.subject_procedures}
+    )
+
+    procedures = _validate_roundtrip(merged_proc, Procedures)
+    acquisition = _validate_roundtrip(
+        build_acquisition(subject_id, cfg, procedures, modality), Acquisition
+    )
+
+    # Stamp the provenance URL onto every artifact this capsule generates
+    # or assembles. subject.json is intentionally excluded — that's a
+    # passthrough from the metadata service. DataDescription has no `notes`
+    # field, so we stamp `data_summary` instead.
+    procedures.notes = augment_notes(procedures.notes)
+    acquisition.notes = augment_notes(acquisition.notes)
+    dd.data_summary = augment_notes(dd.data_summary)
+
+    procedures.write_standard_file(output_directory=RESULTS_DIR)
+    acquisition.write_standard_file(output_directory=RESULTS_DIR)
+    subject.write_standard_file(output_directory=RESULTS_DIR)
+    dd.write_standard_file(output_directory=RESULTS_DIR)
+
+    print(f"  procedures.json:        {len(procedures.subject_procedures)} subject + {len(procedures.specimen_procedures)} specimen procedures")
+    print(f"  acquisition.json:       {len(acquisition.specimen_id)} specimens")
+    print(f"  subject.json:           written")
+    print(f"  data_description.json:  name={dd.name!r}")
+
+    asset = _find_input_asset(subject_id)
+    if asset is None:
+        print(
+            f"  WARNING: no input asset matching {subject_id}_* in {DATA_DIR}. "
+            f"Skipping raw data copy. (Expected on Code Ocean — set up the App "
+            f"Panel parameters and attach the right asset; benign if you're "
+            f"running locally without /data/ mounted.)"
+        )
+    else:
+        _copy_modality_data(asset, modality, RESULTS_DIR)
+
+    print(f"\nWrote bundle for {subject_id}/{modality} to {RESULTS_DIR}")
 
 
 if __name__ == "__main__":
-    run()
+    args = _parse_args()
+    run(args.subject_id, args.modality)

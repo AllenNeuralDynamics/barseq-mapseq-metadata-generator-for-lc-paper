@@ -25,6 +25,7 @@ import json
 import tempfile
 from pathlib import Path
 
+from aind_data_schema.core.data_description import build_data_name
 from aind_metadata_mapper.gather_metadata import GatherMetadataJob
 from aind_metadata_mapper.models import DataDescriptionSettings, JobSettings
 
@@ -118,13 +119,18 @@ def main() -> None:
 
             for modality in ("MAPseq", "BARseq"):
                 mod_job = _make_job(subject_id, modality, tmp)
-                acq_start = cfg[START_KEYS[modality]].isoformat()
+                acq_start = cfg[START_KEYS[modality]]
                 dd = mod_job.build_data_description(
-                    acquisition_start_time=acq_start,
+                    acquisition_start_time=acq_start.isoformat(),
                     subject_id=subject_id,
                 )
+                # Override the auto-generated name. By default it's just
+                # `<subject>_<acq_time>`; AIND convention for raw-data assets
+                # is `<modality>_<subject>_<acq_time>` so the modality is
+                # legible at a glance in the asset name.
+                dd["name"] = build_data_name(f"{modality.lower()}_{subject_id}", acq_start)
                 _write_json(subject_dir / modality.lower() / "data_description.json", dd)
-                print(f"  built {modality.lower()}/data_description.json (name={dd.get('name')!r})")
+                print(f"  built {modality.lower()}/data_description.json (name={dd['name']!r})")
 
 
 if __name__ == "__main__":
