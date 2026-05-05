@@ -89,7 +89,7 @@ existing `acquisition.json` / `procedures.json` from that folder, fetches
 the missing pieces, and writes `subject.json` + `data_description.json`
 into the same folder.
 
-`project_name` is hardcoded in `code/generators.py` (`PROJECT_NAME`) and must
+`project_name` is hardcoded in `code/gather_metadata_settings_generator.py` (`PROJECT_NAME`) and must
 match a project name registered in the AIND metadata service exactly,
 otherwise `funding_source` and `investigators` come back empty. If the
 project gets renamed upstream, update `PROJECT_NAME` and rerun Step 1.
@@ -121,28 +121,32 @@ After Step 2, each modality folder contains the full bundle
 
 ```
 code/
-├── run                       # bash entry, called by Code Ocean Reproducible Run
-├── run_capsule.py            # iterates SUBJECTS, writes per-modality folders
-├── _procedures_helpers.py    # slide regions + sectioning helpers
-├── generators.py             # build_procedures / build_*_acquisition / build_gather_metadata_settings
-└── subjects.py               # SUBJECTS dict — edit this to add or change a subject
+├── run                                       # bash entry, called by Code Ocean Reproducible Run
+├── run_capsule.py                            # orchestrator: iterates SUBJECTS, calls generators, writes JSONs
+├── subjects.py                               # SUBJECTS dict — edit to add or change a subject
+├── procedures_generator.py                   # build_procedures + slide-region chunking + specimen-id collectors
+├── acquisition_generator.py                  # build_mapseq_acquisition / build_barseq_acquisition + acquisition notes
+├── gather_metadata_settings_generator.py     # build_gather_metadata_settings + PROJECT_NAME, data summaries
+├── provenance.py                             # PROVENANCE_URL + augment_notes (shared by procedures + acquisitions)
+└── _procedures_helpers.py                    # generic sectioning utilities (verbatim copy from PR #1763)
 environment/
-└── Dockerfile                # pins aind-data-schema to dev branch
+└── Dockerfile                                # pins aind-data-schema to dev branch
 ```
 
 ### Where to edit what
 
-| Thing you want to change                                    | File                          |
-|-------------------------------------------------------------|-------------------------------|
-| Add a new subject, change dates / counts                    | `code/subjects.py`            |
-| Tweak generated output (notes, protocol IDs, data summaries) | `code/generators.py`          |
-| Set `PROJECT_NAME` for the gather_metadata step             | `code/generators.py`          |
-| Change pinned `aind-data-schema` version                    | `environment/Dockerfile`      |
-| Update slide regions / chunking definition                  | `code/_procedures_helpers.py` |
+| Thing you want to change                                     | File                                          |
+|--------------------------------------------------------------|-----------------------------------------------|
+| Add a new subject, change dates / counts                     | `code/subjects.py`                            |
+| Tweak procedure notes, sectioning constants, slide regions   | `code/procedures_generator.py`                |
+| Tweak acquisition notes, protocol IDs                        | `code/acquisition_generator.py`               |
+| Change `PROJECT_NAME` or per-modality `data_summary`         | `code/gather_metadata_settings_generator.py`  |
+| Set `PROVENANCE_URL` after a Code Ocean release              | `code/provenance.py`                          |
+| Change pinned `aind-data-schema` version                     | `environment/Dockerfile`                      |
 
 ## Provenance: setting `PROVENANCE_URL`
 
-`generators.py` has a module-level `PROVENANCE_URL` (default `None`). When
+`provenance.py` has a module-level `PROVENANCE_URL` (default `None`). When
 this capsule is published as a Code Ocean release, set this to the release
 URL — every generated JSON's `notes` field will then carry a line like:
 

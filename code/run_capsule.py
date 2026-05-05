@@ -29,12 +29,9 @@ from pathlib import Path
 from aind_data_schema.core.acquisition import Acquisition
 from aind_data_schema.core.procedures import Procedures
 
-from generators import (
-    build_barseq_acquisition,
-    build_gather_metadata_settings,
-    build_mapseq_acquisition,
-    build_procedures,
-)
+from acquisition_generator import build_barseq_acquisition, build_mapseq_acquisition
+from gather_metadata_settings_generator import build_gather_metadata_settings
+from procedures_generator import build_procedures
 from subjects import SUBJECTS
 
 # Code Ocean mounts /results/ as the canonical output location. Override
@@ -59,11 +56,10 @@ def run() -> None:
         mapseq_acq = _validate_roundtrip(build_mapseq_acquisition(subject_id, cfg, procedures), Acquisition)
         barseq_acq = _validate_roundtrip(build_barseq_acquisition(subject_id, cfg, procedures), Acquisition)
 
-        procedures_json = procedures.model_dump_json(indent=3)
-        (mapseq_dir / "procedures.json").write_text(procedures_json)
-        (barseq_dir / "procedures.json").write_text(procedures_json)
-        (mapseq_dir / "acquisition.json").write_text(mapseq_acq.model_dump_json(indent=3))
-        (barseq_dir / "acquisition.json").write_text(barseq_acq.model_dump_json(indent=3))
+        procedures.write_standard_file(output_directory=mapseq_dir)
+        procedures.write_standard_file(output_directory=barseq_dir)
+        mapseq_acq.write_standard_file(output_directory=mapseq_dir)
+        barseq_acq.write_standard_file(output_directory=barseq_dir)
 
         mapseq_settings = build_gather_metadata_settings(subject_id, "MAPseq")
         barseq_settings = build_gather_metadata_settings(subject_id, "BARseq")
