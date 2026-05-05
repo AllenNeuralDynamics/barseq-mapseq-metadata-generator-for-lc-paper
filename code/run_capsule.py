@@ -29,7 +29,7 @@ from pathlib import Path
 from aind_data_schema.core.acquisition import Acquisition
 from aind_data_schema.core.procedures import Procedures
 
-from acquisition_generator import build_barseq_acquisition, build_mapseq_acquisition
+from acquisition_generator import build_acquisition
 from gather_metadata_settings_generator import build_gather_metadata_settings
 from procedures_generator import build_procedures
 from subjects import SUBJECTS
@@ -40,11 +40,38 @@ RESULTS_DIR = Path(os.environ.get("CO_RESULTS_DIR", "/results"))
 
 
 def _validate_roundtrip(model_obj, model_cls):
-    """Serialize and re-validate. Confirms the object is valid JSON before writing."""
+    """Serialize a pydantic model to JSON and re-parse it as the same class.
+
+    Catches a class of bug that plain serialization misses: fields that
+    serialize fine but fail on re-validation (e.g. enum/string mismatches).
+
+    Args:
+        model_obj: A pydantic model instance.
+        model_cls: The class to re-validate against (typically `type(model_obj)`).
+
+    Returns:
+        A freshly-parsed instance of `model_cls` whose contents equal `model_obj`.
+        Raises `pydantic.ValidationError` if re-parsing fails.
+    """
     return model_cls.model_validate_json(model_obj.model_dump_json())
 
 
 def run() -> None:
+    """Build and write the per-modality metadata bundle for every subject in SUBJECTS.
+
+    For each subject in `subjects.SUBJECTS`, builds the Procedures and the two
+    Acquisitions (MAPseq, BARseq), validates each via JSON round-trip, and writes
+    a self-contained folder per modality:
+
+        <RESULTS_DIR>/<subject_id>/{mapseq,barseq}/
+            procedures.json                 (identical between mapseq/ and barseq/)
+            acquisition.json                (modality-specific)
+            gather_metadata_settings.json   (consumed by the local gather_metadata step)
+
+    Reads `CO_RESULTS_DIR` from the environment to override the default `/results`.
+    Has no return value; results are observed via files written under `RESULTS_DIR`
+    and a per-subject summary printed to stdout.
+    """
     for subject_id, cfg in SUBJECTS.items():
         print(f"=== {subject_id} ===")
         mapseq_dir = RESULTS_DIR / subject_id / "mapseq"
@@ -53,8 +80,8 @@ def run() -> None:
         barseq_dir.mkdir(parents=True, exist_ok=True)
 
         procedures = _validate_roundtrip(build_procedures(subject_id, cfg), Procedures)
-        mapseq_acq = _validate_roundtrip(build_mapseq_acquisition(subject_id, cfg, procedures), Acquisition)
-        barseq_acq = _validate_roundtrip(build_barseq_acquisition(subject_id, cfg, procedures), Acquisition)
+        mapseq_acq = _validate_roundtrip(build_acquisition(subject_id, cfg, procedures, "MAPseq"), Acquisition)
+        barseq_acq = _validate_roundtrip(build_acquisition(subject_id, cfg, procedures, "BARseq"), Acquisition)
 
         procedures.write_standard_file(output_directory=mapseq_dir)
         procedures.write_standard_file(output_directory=barseq_dir)

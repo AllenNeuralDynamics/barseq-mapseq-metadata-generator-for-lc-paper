@@ -110,6 +110,12 @@ _SLIDE_REGIONS = [
 
 
 def _load_slide_regions() -> Dict[int, dict]:
+    """Group the flat _SLIDE_REGIONS rows by slide number.
+
+    Returns:
+        Dict keyed by slide number. Each value has `section_start`, `section_end`,
+        and a `chunks` list (one entry per brain-region chunk cut from that slide).
+    """
     slides: Dict[int, dict] = {}
     for row in _SLIDE_REGIONS:
         slide = row["slide_num"]
@@ -131,7 +137,17 @@ def _load_slide_regions() -> Dict[int, dict]:
 
 
 def _generate_mapseq_slide_chunks(specimen_id: str, sectioning_date) -> List[SpecimenProcedure]:
-    """One SpecimenProcedure per slide, capturing the brain-region chunks cut from it."""
+    """One SpecimenProcedure per MAPseq slide, capturing the brain-region chunks cut from it.
+
+    Args:
+        specimen_id: Subject ID; used as the prefix for input slice IDs and chunk IDs.
+        sectioning_date: Date of the chunking; written to start_date and end_date.
+
+    Returns:
+        A list of SpecimenProcedure models — one per slide in `_SLIDE_REGIONS`.
+        Each has procedure_type="Sectioning" and a single Sectioning detail whose
+        sections are the per-chunk outputs (e.g. `<specimen_id>_map001_001`).
+    """
     slides = _load_slide_regions()
     procedures = []
     for slide_num, slide_data in slides.items():
@@ -178,6 +194,16 @@ def _generate_mapseq_slide_chunks(specimen_id: str, sectioning_date) -> List[Spe
 # Sectioning sub-procedure builders
 # ---------------------------------------------------------------------------
 def _mapseq_first_batch(subject_id: str, cfg: dict) -> PlanarSectioning:
+    """Build the MAPseq first-batch PlanarSectioning (sections 1..mapseq_first_batch_count).
+
+    Args:
+        subject_id: Subject ID, used as the prefix on each PlanarSection.
+        cfg: Per-subject config; reads `mapseq_first_batch_count`.
+
+    Returns:
+        PlanarSectioning with `cfg["mapseq_first_batch_count"]` non-uniform partial
+        slices spread across `_MAPSEQ_FIRST_BATCH_SPAN_UM`.
+    """
     n = cfg["mapseq_first_batch_count"]
     starts = [i * (_MAPSEQ_FIRST_BATCH_SPAN_UM / n) for i in range(n)]
     sections = create_nonuniform_sections(
@@ -193,6 +219,17 @@ def _mapseq_first_batch(subject_id: str, cfg: dict) -> PlanarSectioning:
 
 
 def _mapseq_second_batch(subject_id: str, cfg: dict) -> PlanarSectioning:
+    """Build the MAPseq second-batch PlanarSectioning (continues numbering after the first batch).
+
+    Args:
+        subject_id: Subject ID, used as the prefix on each PlanarSection.
+        cfg: Per-subject config; reads `mapseq_first_batch_count` and `mapseq_second_batch_count`.
+
+    Returns:
+        PlanarSectioning with `cfg["mapseq_second_batch_count"]` non-uniform partial
+        slices spread across `_MAPSEQ_SECOND_BATCH_SPAN_UM`, starting at
+        `_MAPSEQ_SECOND_BATCH_ORIGIN_UM` and numbered after the first batch.
+    """
     n = cfg["mapseq_second_batch_count"]
     start = cfg["mapseq_first_batch_count"] + 1
     starts = [
@@ -212,6 +249,16 @@ def _mapseq_second_batch(subject_id: str, cfg: dict) -> PlanarSectioning:
 
 
 def _barseq_lc(subject_id: str, cfg: dict) -> PlanarSectioning:
+    """Build the BARseq LC-section PlanarSectioning (uniform slicing through the LC range).
+
+    Args:
+        subject_id: Subject ID, used as the prefix on each PlanarSection.
+        cfg: Per-subject config; reads `barseq_count`.
+
+    Returns:
+        PlanarSectioning with `cfg["barseq_count"]` uniform LC sections starting
+        at `_BARSEQ_START_UM`, each `_BARSEQ_THICKNESS_UM` thick.
+    """
     sections = create_uniform_sections(
         specimen_id=subject_id,
         start_section_num=1,
@@ -225,6 +272,15 @@ def _barseq_lc(subject_id: str, cfg: dict) -> PlanarSectioning:
 
 
 def _spinal(subject_id: str, cfg: dict) -> Sectioning:
+    """Build the MAPseq spinal-cord Sectioning (one or more Sections sharing one output ID).
+
+    Args:
+        subject_id: Subject ID; used to form `<subject_id>_spinal`.
+        cfg: Per-subject config; reads `spinal_section_count` (number of Section entries).
+
+    Returns:
+        A Sectioning whose Sections all share `output_specimen_id="<subject_id>_spinal"`.
+    """
     return Sectioning(
         sections=[
             Section(
@@ -242,6 +298,22 @@ def _spinal(subject_id: str, cfg: dict) -> Sectioning:
 # Public builder
 # ---------------------------------------------------------------------------
 def build_procedures(subject_id: str, cfg: dict) -> Procedures:
+    """Build the full Procedures object for one subject.
+
+    Combines the four LC-paper sectioning sub-procedures (MAPseq first batch,
+    BARseq LC, MAPseq second batch, spinal cord) with one SpecimenProcedure per
+    MAPseq slide describing how that slide was chunked into brain-region pieces.
+
+    Args:
+        subject_id: Subject ID (e.g. "780345").
+        cfg: Per-subject config from `subjects.SUBJECTS`. Reads `mapseq_first_batch_count`,
+            `mapseq_second_batch_count`, `barseq_count`, `spinal_section_count`, and
+            `sectioning_date`.
+
+    Returns:
+        A Procedures model. For the LC paper this is 17 SpecimenProcedures
+        (4 batch-level + 13 slide-chunk SpecimenProcedures).
+    """
     n_first = cfg["mapseq_first_batch_count"]
     n_second = cfg["mapseq_second_batch_count"]
     sectioning_date = cfg["sectioning_date"]
@@ -299,6 +371,17 @@ def _collect_specimen_ids(
     type_predicate,
     pattern: re.Pattern,
 ) -> List[str]:
+    """Walk a Procedures object and collect output_specimen_ids matching a filter.
+
+    Args:
+        procedures: Procedures model to scan.
+        type_predicate: Callable(procedure_detail) -> bool; controls which detail
+            types are included (e.g. strict `type(d) is Sectioning`).
+        pattern: Compiled regex; only IDs that match are kept.
+
+    Returns:
+        Deduplicated list of `output_specimen_id` strings, in traversal order.
+    """
     ids: List[str] = []
     seen: set = set()
     for sp in procedures.specimen_procedures:
@@ -317,12 +400,19 @@ def _collect_specimen_ids(
 
 
 def mapseq_specimen_ids(procedures: Procedures) -> List[str]:
-    """MAPseq specimen IDs — everything sent to CSHL for sequencing.
+    """MAPseq acquisition specimen_id list — everything shipped to CSHL for sequencing.
 
-    Includes the brain-region chunks (e.g. 780345_map001_001) and the spinal
-    cord (e.g. 780345_spinal). Filters strictly by `type(detail) is Sectioning`
+    Includes the brain-region chunks (e.g. `780345_map001_001`) and the spinal
+    cord (e.g. `780345_spinal`). Filters strictly by `type(detail) is Sectioning`
     (not the PlanarSectioning subclass) so the upstream slide IDs
-    (e.g. 780345_map001) are excluded.
+    (e.g. `780345_map001`) are excluded.
+
+    Args:
+        procedures: Procedures model previously built by `build_procedures`.
+
+    Returns:
+        Deduplicated, ordered list of `output_specimen_id` strings to use as
+        the MAPseq Acquisition's `specimen_id`.
     """
     return _collect_specimen_ids(
         procedures,
@@ -332,7 +422,18 @@ def mapseq_specimen_ids(procedures: Procedures) -> List[str]:
 
 
 def barseq_specimen_ids(procedures: Procedures) -> List[str]:
-    """Section-level BARseq IDs (e.g. 780345_bar001) — the LC slides imaged in-house."""
+    """BARseq acquisition specimen_id list — the LC slides imaged in-house.
+
+    Pulls section-level IDs (e.g. `780345_bar001`) from the BARseq LC
+    PlanarSectioning sub-procedure.
+
+    Args:
+        procedures: Procedures model previously built by `build_procedures`.
+
+    Returns:
+        Deduplicated, ordered list of `output_specimen_id` strings to use as
+        the BARseq Acquisition's `specimen_id`.
+    """
     return _collect_specimen_ids(
         procedures,
         type_predicate=lambda d: isinstance(d, PlanarSectioning),

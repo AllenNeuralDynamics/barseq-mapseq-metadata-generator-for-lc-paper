@@ -37,6 +37,18 @@ def build_gather_metadata_settings(subject_id: str, modality: str) -> dict:
 
     `acquisition_start_time` is intentionally omitted — gather_metadata reads
     it from the acquisition.json sitting in the same folder.
+
+    Args:
+        subject_id: Subject ID (e.g. "780345").
+        modality: Either "MAPseq" or "BARseq" (must match `Modality.from_abbreviation`).
+
+    Returns:
+        A plain dict suitable for `JobSettings.model_validate_json(json.dumps(...))`.
+        Output dir is `"."` so the job is meant to be run from inside the modality
+        folder this file is written to.
+
+    Raises:
+        ValueError: if `modality` is not "MAPseq" or "BARseq".
     """
     if modality == "MAPseq":
         data_summary = _MAPSEQ_DATA_SUMMARY
