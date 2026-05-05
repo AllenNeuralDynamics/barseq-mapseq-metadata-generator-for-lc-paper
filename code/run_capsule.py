@@ -31,6 +31,7 @@ from aind_data_schema.core.subject import Subject
 
 from acquisition_generator import build_acquisition
 from procedures_generator import build_procedures
+from provenance import augment_notes
 from subjects import SUBJECTS
 
 # Code Ocean mounts /results/ as the canonical output location. Override
@@ -109,6 +110,18 @@ def run() -> None:
         procedures = _validate_roundtrip(merged_proc, Procedures)
         mapseq_acq = _validate_roundtrip(build_acquisition(subject_id, cfg, procedures, "MAPseq"), Acquisition)
         barseq_acq = _validate_roundtrip(build_acquisition(subject_id, cfg, procedures, "BARseq"), Acquisition)
+
+        # Stamp the provenance URL onto every artifact this capsule actually
+        # generates or assembles, so any downstream reader can trace it back
+        # to the code that produced it. subject.json is intentionally
+        # excluded — that's a passthrough from the metadata service, not
+        # something this capsule authored. DataDescription has no `notes`
+        # field, so we augment `data_summary` for those.
+        procedures.notes = augment_notes(procedures.notes)
+        mapseq_acq.notes = augment_notes(mapseq_acq.notes)
+        barseq_acq.notes = augment_notes(barseq_acq.notes)
+        mapseq_dd.data_summary = augment_notes(mapseq_dd.data_summary)
+        barseq_dd.data_summary = augment_notes(barseq_dd.data_summary)
 
         for d in (mapseq_dir, barseq_dir):
             procedures.write_standard_file(output_directory=d)

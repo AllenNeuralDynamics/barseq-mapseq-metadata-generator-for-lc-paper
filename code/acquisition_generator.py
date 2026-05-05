@@ -15,7 +15,6 @@ from aind_data_schema.core.acquisition import Acquisition, ExternalDataStream
 from aind_data_schema.core.procedures import Procedures
 
 from procedures_generator import barseq_specimen_ids, mapseq_specimen_ids
-from provenance import augment_notes
 
 _MAPSEQ_ACQUISITION_NOTE = (
     "MAPseq was performed off-site at Cold Spring Harbor Laboratory. "
@@ -73,8 +72,9 @@ def build_acquisition(
 
     Returns:
         An Acquisition model with `acquisition_type="BarcodeSequencing"`, the
-        chosen `Modality`, an `ExternalDataStream`, and notes that carry the
-        provenance stamp if `PROVENANCE_URL` is set.
+        chosen `Modality`, an `ExternalDataStream`, and the modality's
+        descriptive notes. (The provenance stamp is applied in `run_capsule.py`
+        before writing, alongside every other generated artifact.)
 
     Raises:
         KeyError: if `modality` is not "MAPseq" or "BARseq".
@@ -90,7 +90,7 @@ def build_acquisition(
         experimenters=cfg[modality_cfg["cfg_experimenters"]],
         protocol_id=modality_cfg["protocol_id"],
         acquisition_type="BarcodeSequencing",
-        notes=augment_notes(modality_cfg["acquisition_note"]),
+        notes=modality_cfg["acquisition_note"],
         data_streams=[
             ExternalDataStream(
                 stream_start_time=start,
