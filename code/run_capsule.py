@@ -134,7 +134,11 @@ def _copy_modality_data(asset_path: Path, modality: str, results_dir: Path) -> N
 
 
 def _parse_args() -> argparse.Namespace:
-    """Parse the CLI args wired to Code Ocean App Panel parameters.
+    """Parse args wired to Code Ocean parameters.
+
+    Accepts either CLI flags (`--subject-id`, `--modality`) or environment
+    variables (`SUBJECT_ID`, `MODALITY`), so the capsule works whether Code
+    Ocean's App Panel passes parameters as args or as env vars.
 
     Returns:
         argparse.Namespace with `subject_id` and `modality` attributes.
@@ -142,17 +146,25 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
         "--subject-id",
-        required=True,
+        default=os.environ.get("SUBJECT_ID"),
         choices=sorted(SUBJECTS.keys()),
-        help="Subject ID — must be a key in SUBJECTS.",
+        help="Subject ID. Defaults to the SUBJECT_ID env var.",
     )
     parser.add_argument(
         "--modality",
-        required=True,
+        default=os.environ.get("MODALITY"),
         choices=["MAPseq", "BARseq"],
-        help="Modality to build the bundle for.",
+        help="Modality. Defaults to the MODALITY env var.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not args.subject_id or not args.modality:
+        parser.error(
+            "Both subject-id and modality are required. Pass them as "
+            "--subject-id / --modality CLI flags, or set the SUBJECT_ID / "
+            "MODALITY environment variables (Code Ocean's Reproducible Run "
+            "dialog has an env vars section)."
+        )
+    return args
 
 
 def run(subject_id: str, modality: str) -> None:

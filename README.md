@@ -34,9 +34,9 @@ canonical AIND name `<modality>_<subject>_<acquisition_start>`:
 | Run | --subject-id | --modality | Resulting asset name                          |
 |-----|--------------|------------|-----------------------------------------------|
 | 1   | 780345       | MAPseq     | `mapseq_780345_2025-03-24_12-00-00`           |
-| 2   | 780345       | BARseq     | `barseq_780345_2025-02-24_00-00-00`           |
+| 2   | 780345       | BARseq     | `barseq_780345_2025-02-24_12-00-00`           |
 | 3   | 780346       | MAPseq     | `mapseq_780346_2025-07-23_12-00-00`           |
-| 4   | 780346       | BARseq     | `barseq_780346_2025-06-13_16-39-31`           |
+| 4   | 780346       | BARseq     | `barseq_780346_2025-06-13_12-00-00`           |
 
 The `name` field in each `data_description.json` matches the asset name in
 the table above and is what Code Ocean should use when promoting `/results/`

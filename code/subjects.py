@@ -9,8 +9,10 @@ generators.py.
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-# MAPseq times use noon LA time to avoid timezone-edge day shifts when
-# serialized to UTC.
+# Acquisition start times use noon LA time to avoid timezone-edge day
+# shifts when serialized to UTC. Source data only gives us calendar dates
+# anyway (mailing dates for MAPseq, slide-folder dates for BARseq), so noon
+# is more honest than implying minute-precision we don't have.
 LA_TZ = ZoneInfo("America/Los_Angeles")
 
 SUBJECTS = {
@@ -24,7 +26,7 @@ SUBJECTS = {
         "mapseq_start": datetime(2025, 3, 24, 12, 0, 0, tzinfo=LA_TZ),
         "mapseq_end": datetime(2025, 10, 30, 12, 0, 0, tzinfo=LA_TZ),
         "barseq_experimenters": ["BARseq team"],
-        "barseq_start": datetime(2025, 2, 24, 0, 0, 0, tzinfo=LA_TZ),
+        "barseq_start": datetime(2025, 2, 24, 12, 0, 0, tzinfo=LA_TZ),
         "barseq_end": datetime(2025, 3, 21, 23, 59, 59, tzinfo=LA_TZ),
     },
     "780346": {
@@ -37,7 +39,7 @@ SUBJECTS = {
         "mapseq_start": datetime(2025, 7, 23, 12, 0, 0, tzinfo=LA_TZ),
         "mapseq_end": datetime(2025, 10, 30, 12, 0, 0, tzinfo=LA_TZ),
         "barseq_experimenters": ["BARseq team"],
-        "barseq_start": datetime(2025, 6, 13, 16, 39, 31, tzinfo=LA_TZ),
+        "barseq_start": datetime(2025, 6, 13, 12, 0, 0, tzinfo=LA_TZ),
         "barseq_end": datetime(2025, 7, 11, 23, 59, 59, tzinfo=LA_TZ),
     },
 }
