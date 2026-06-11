@@ -15,17 +15,17 @@ Produces:
         mapseq/data_description.json      # built by gather_metadata using
         barseq/data_description.json      # /api/v2/funding + /api/v2/investigators
 
-Requires network access to http://aind-metadata-service. Run with:
+Requires network access to http://aind-metadata-service. Run with the same
+pinned versions as the capsule (see environment/Dockerfile):
 
     cd code
-    uv run --with aind-metadata-mapper --with git+https://github.com/AllenNeuralDynamics/aind-data-schema.git@dev python prefetch_inputs.py
+    uv run --with aind-data-schema==2.8.1 --with aind-metadata-mapper==1.3.0 python prefetch_inputs.py
 """
 
 import json
 import tempfile
 from pathlib import Path
 
-from aind_data_schema.core.data_description import build_data_name
 from aind_metadata_mapper.gather_metadata import GatherMetadataJob
 from aind_metadata_mapper.models import DataDescriptionSettings, JobSettings
 
@@ -124,11 +124,6 @@ def main() -> None:
                     acquisition_start_time=acq_start.isoformat(),
                     subject_id=subject_id,
                 )
-                # Override the auto-generated name. By default it's just
-                # `<subject>_<acq_time>`; AIND convention for raw-data assets
-                # is `<modality>_<subject>_<acq_time>` so the modality is
-                # legible at a glance in the asset name.
-                dd["name"] = build_data_name(f"{modality.lower()}_{subject_id}", acq_start)
                 _write_json(subject_dir / modality.lower() / "data_description.json", dd)
                 print(f"  built {modality.lower()}/data_description.json (name={dd['name']!r})")
 

@@ -5,10 +5,11 @@ ARG DEBIAN_FRONTEND=noninteractive
 ARG GIT_ASKPASS
 COPY git-ask-pass /
 
-# aind-data-schema is pinned to the `dev` branch because PR #1781
-# (Barseq blackbox acquisition) is merged there but not yet in a release.
-# Before publishing this capsule as a release, freeze this to a specific
-# commit hash for reproducibility, e.g.:
-#   git+https://github.com/AllenNeuralDynamics/aind-data-schema.git@<sha>
+# Pin both AIND packages to released versions so the Code Ocean environment
+# is fully reproducible. aind-data-schema is what the capsule (run_capsule.py)
+# uses at run time; aind-metadata-mapper is only used by the one-off
+# prefetch_inputs.py step, but we pin it here too so the whole environment
+# is captured.
 RUN pip install -U --no-cache-dir \
-    git+https://github.com/AllenNeuralDynamics/aind-data-schema.git@dev
+    aind-data-schema==2.8.1 \
+    aind-metadata-mapper==1.3.0

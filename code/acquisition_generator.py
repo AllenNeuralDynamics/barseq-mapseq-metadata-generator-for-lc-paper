@@ -73,8 +73,7 @@ def build_acquisition(
     Returns:
         An Acquisition model with `acquisition_type="BarcodeSequencing"`, the
         chosen `Modality`, an `ExternalDataStream`, and the modality's
-        descriptive notes. (The provenance stamp is applied in `run_capsule.py`
-        before writing, alongside every other generated artifact.)
+        descriptive notes.
 
     Raises:
         KeyError: if `modality` is not "MAPseq" or "BARseq".

@@ -5,44 +5,43 @@ A Code Ocean capsule that generates AIND-data-schema metadata JSON files
 two subjects in the LC paper: **780345** and **780346**.
 
 This capsule exists primarily for **provenance**. The generated JSONs end up
-on S3 attached to the BARseq and MAPseq data assets in DocDB. Each JSON
-includes a `notes` field that points back to a fixed Code Ocean release of
-this capsule, so a future reader can reproduce the exact
-generated file by rerunning the linked release.
+on S3 attached to the BARseq and MAPseq data assets in DocDB. Each bundle
+includes a `processing.json` that records the Code Ocean release (web URL +
+version) that produced it — looked up at run time from the Code Ocean API —
+so a future reader can reproduce the exact bundle by rerunning that release.
 
 ## Overview
 
-The capsule produces **one data asset per (subject × modality) combo**, so
-**four runs total** to publish all four assets. Each Reproducible Run
-takes `--subject-id` and `--modality` parameters (set via the Code Ocean
-App Panel) and writes a single flat `/results/` folder that contains both
-the raw data (copied from the attached input asset) and freshly-generated
-metadata:
+The capsule produces **one data asset per (subject × modality) combo** — four
+in total. A single Reproducible Run (no parameters) writes all four in one
+pass, each into its own `/results/<name>/` folder named by the bundle's
+`data_description` name. Save each folder out as its own data asset under that
+name.
 
 ```
 results/
-├── procedures.json           # sectioning (locally built) + injections (from service)
-├── acquisition.json          # modality-specific
-├── subject.json              # passthrough from the metadata service
-├── data_description.json     # modality-specific (name field = canonical asset name)
-└── <Modality>/               # raw data, copied verbatim from /data/<asset>/<Modality>/
+├── 780345_2025-03-24_12-00-00/    # 780345 MAPseq
+│   ├── procedures.json            # sectioning (locally built) + injections (from service)
+│   ├── acquisition.json           # modality-specific
+│   ├── subject.json               # passthrough from the metadata service
+│   ├── data_description.json      # name field = the folder name = canonical asset name
+│   ├── processing.json            # provenance: Code Ocean release URL + version
+│   └── MAPseq/                    # raw data, copied verbatim from /data/<asset>/MAPseq/
+├── 780345_2025-02-24_12-00-00/    # 780345 BARseq
+├── 780346_2025-07-23_12-00-00/    # 780346 MAPseq
+└── 780346_2025-06-13_12-00-00/    # 780346 BARseq
 ```
 
-Each `/results/` folder becomes one Code Ocean data asset with the
-canonical AIND name `<modality>_<subject>_<acquisition_start>`:
+The four folder names are the canonical AIND names `<subject>_<acquisition_start>`:
 
-| Run | --subject-id | --modality | Resulting asset name                          |
-|-----|--------------|------------|-----------------------------------------------|
-| 1   | 780345       | MAPseq     | `mapseq_780345_2025-03-24_12-00-00`           |
-| 2   | 780345       | BARseq     | `barseq_780345_2025-02-24_12-00-00`           |
-| 3   | 780346       | MAPseq     | `mapseq_780346_2025-07-23_12-00-00`           |
-| 4   | 780346       | BARseq     | `barseq_780346_2025-06-13_12-00-00`           |
+| Subject | Modality | Folder / asset name              |
+|---------|----------|----------------------------------|
+| 780345  | MAPseq   | `780345_2025-03-24_12-00-00`     |
+| 780345  | BARseq   | `780345_2025-02-24_12-00-00`     |
+| 780346  | MAPseq   | `780346_2025-07-23_12-00-00`     |
+| 780346  | BARseq   | `780346_2025-06-13_12-00-00`     |
 
-The `name` field in each `data_description.json` matches the asset name in
-the table above and is what Code Ocean should use when promoting `/results/`
-to a data asset.
-
-`procedures.json` is identical across all four runs of a given subject —
+`procedures.json` is identical across both modalities of a given subject —
 the brain was sectioned once and both modalities used the same slides. It
 covers MAPseq batches (300 µm partial slices, plates 0–98 and 112–132),
 BARseq LC sections (20 µm uniform, plates 99–112), the spinal cord, the
@@ -94,8 +93,8 @@ adding a new subject to `subjects.py`. To re-run on-prem:
 ```bash
 cd code
 uv run \
-  --with git+https://github.com/AllenNeuralDynamics/aind-metadata-mapper.git@dev \
-  --with git+https://github.com/AllenNeuralDynamics/aind-data-schema.git@dev \
+  --with aind-data-schema==2.8.1 \
+  --with aind-metadata-mapper==1.3.0 \
   python prefetch_inputs.py
 ```
 
@@ -104,55 +103,40 @@ project name registered in the metadata service exactly, otherwise
 `funding_source` and `investigators` come back empty in the resulting
 `data_description.json`.
 
-### Step 2: run the capsule (four times)
+### Step 2: run the capsule (once)
 
 #### On Code Ocean (the canonical release path)
 
-For each row in the table above, attach the input data asset matching the
-subject (the `780345_*` or `780346_*` asset that contains the `BARseq/`
-and `MAPseq/` subfolders), set the App Panel parameters to that row's
-`--subject-id` and `--modality`, and click **Reproducible Run**. Each run
-produces a `/results/` folder that Code Ocean turns into a data asset
-named per the table.
-
-After all four runs are done, hand the four data asset references off to
-whoever owns moving them from the internal Code Ocean bucket to
-`aind-open-data`.
+Attach both input data assets (the `780345_*` and `780346_*` assets that
+contain the `BARseq/` and `MAPseq/` subfolders) and click **Reproducible
+Run** — no parameters. The single run writes all four bundles into
+`/results/<name>/` folders (see the layout above). Save each folder out as
+its own data asset under its folder name, then hand the four asset references
+off to whoever owns moving them to `aind-open-data`.
 
 #### Locally (for development or sanity checks)
 
 ```bash
 cd code
-CO_RESULTS_DIR=../local_results uv run --with git+https://github.com/AllenNeuralDynamics/aind-data-schema.git@dev \
-    python run_capsule.py --subject-id 780345 --modality MAPseq
+CO_RESULTS_DIR=../local_results uv run --with aind-data-schema==2.8.1 \
+    python run_capsule.py
 ```
 
-Each invocation writes one combo's bundle to `CO_RESULTS_DIR`. Each run
-clobbers the previous one, so set `CO_RESULTS_DIR` to a per-combo path if
-you want to keep all four locally:
-
-```bash
-for combo in "780345 MAPseq" "780345 BARseq" "780346 MAPseq" "780346 BARseq"; do
-  read s m <<< "$combo"
-  CO_RESULTS_DIR=../local_results/${m,,}_${s} uv run --with git+https://github.com/AllenNeuralDynamics/aind-data-schema.git@dev \
-      python run_capsule.py --subject-id $s --modality $m
-done
-```
-
-The capsule warns and skips the raw-data copy if `/data/<subject>_*` isn't
-present, so local runs (without the input asset mounted) still produce
-valid metadata bundles — just without the raw data alongside.
+This writes all four bundles under `CO_RESULTS_DIR`. The capsule warns and
+skips the raw-data copy for any subject whose `/data/<subject>_*` asset isn't
+mounted, so local runs (without input assets) still produce valid metadata
+bundles — just without the raw data alongside.
 
 ## Project layout
 
 ```
 code/
 ├── run                          # bash entry, called by Code Ocean Reproducible Run
-├── run_capsule.py               # entry point — takes --subject-id/--modality, writes one bundle to /results/
+├── run_capsule.py               # entry point — writes all four bundles to /results/<name>/ in one pass
 ├── subjects.py                  # SUBJECTS dict — edit to add or change a subject
 ├── procedures_generator.py      # build_procedures + slide-region chunking + specimen-id collectors
 ├── acquisition_generator.py     # build_acquisition + per-modality config (notes, protocol IDs, modality enum)
-├── provenance.py                # PROVENANCE_URL + augment_notes (shared by procedures + acquisitions)
+├── provenance.py                # fetch Code Ocean release URL + version, write processing.json
 ├── _procedures_helpers.py       # generic sectioning utilities (verbatim copy from PR #1763)
 ├── prefetch_inputs.py           # run locally to refresh inputs/ from the metadata service
 └── inputs/                      # committed: subject + procedures + per-modality data_description per subject
@@ -163,7 +147,7 @@ code/
     │   └── barseq/data_description.json
     └── 780346/...
 environment/
-└── Dockerfile                   # pins aind-data-schema to dev branch
+└── Dockerfile                   # pins aind-data-schema + aind-metadata-mapper to released versions
 ```
 
 ### Where to edit what
@@ -174,27 +158,36 @@ environment/
 | Tweak procedure notes, sectioning constants, slide regions   | `code/procedures_generator.py`      |
 | Tweak acquisition notes, protocol IDs                        | `code/acquisition_generator.py`     |
 | Change `PROJECT_NAME` or per-modality `data_summary`         | `code/prefetch_inputs.py`           |
-| Set `PROVENANCE_URL` after a Code Ocean release              | `code/provenance.py`                |
+| Change `processing.json` experimenters                       | `code/provenance.py`                |
 | Refresh subject / data_description / injection procedures    | re-run `code/prefetch_inputs.py`    |
-| Change pinned `aind-data-schema` version                     | `environment/Dockerfile`            |
+| Change pinned `aind-data-schema` / `aind-metadata-mapper`    | `environment/Dockerfile`            |
 
-## Provenance: setting `PROVENANCE_URL`
+## Provenance: `processing.json`
 
-`provenance.py` has a module-level `PROVENANCE_URL` (default `None`). When
-this capsule is published as a Code Ocean release, set this to the release
-URL — every generated JSON's `notes` field will then carry a line like:
+Each bundle gets a `processing.json` (an AIND-data-schema `Processing` record)
+whose `code.url` and `code.version` point at the exact Code Ocean release that
+produced it. `provenance.py` looks these up **at run time** from the
+Code Ocean REST API, so nothing has to be hardcoded before cutting a release —
+there's no chicken-and-egg "set the URL, then cut a new release" dance.
 
-```
-Generated by: https://codeocean.allenneuraldynamics.org/capsule/<id>
-```
+This requires the **Code Ocean API Credentials** Secret to be attached to the
+capsule (Capsule Settings → Credentials). That exposes `API_KEY` at run time;
+combined with the `CO_CAPSULE_ID` / `CO_COMPUTATION_ID` env vars Code Ocean
+injects into every Reproducible Run, `provenance.py` calls
+`/api/v1/capsules/<id>` and `/api/v1/computations/<id>` to read the capsule
+slug (→ web URL) and the release version. On a local run (no credentials)
+`processing.json` is skipped with a warning rather than written with
+placeholder provenance.
 
 Workflow:
 
 1. Develop here, validate the JSONs locally.
-2. Push to a Code Ocean capsule. Run **Reproducible Run** to confirm.
-3. Cut a release of the capsule. Copy its URL.
-4. Set `PROVENANCE_URL` to that URL.
-5. Freeze `aind-data-schema` in the Dockerfile to a specific commit hash.
-6. Cut a *new* release. That release's URL is the one that ships in the JSONs.
-7. Re-run the capsule from the final release; upload the JSONs alongside the
-   data assets on S3 / DocDB.
+2. Push to a Code Ocean capsule and attach the **Code Ocean API Credentials**
+   Secret. Run **Reproducible Run** to confirm.
+3. Cut a release of the capsule.
+4. Run the capsule from that release. Each of the four bundles gets a
+   `processing.json` stamped with that release's URL + version.
+5. Upload the resulting bundles alongside the data assets on S3 / DocDB.
+
+`EXPERIMENTERS` at the top of `provenance.py` records who published the release
+in `processing.json`; edit it if that's not you.
