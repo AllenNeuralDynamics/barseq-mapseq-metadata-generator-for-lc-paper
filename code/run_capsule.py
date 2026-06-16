@@ -10,6 +10,7 @@ input asset. Save each folder out as its own data asset under that name.
 
 import os
 import shutil
+import time
 from pathlib import Path
 
 from aind_data_schema.core.data_description import DataDescription
@@ -84,7 +85,11 @@ def _copy_raw_data(subject_id: str, modality: str, out_dir: Path) -> None:
     src = matches[0] / modality
     if not src.is_dir():
         raise RuntimeError(f"Modality folder {src} not found in input asset")
+    print(f"    copying raw {modality}/ from '{matches[0].name}' "
+          f"(largest step — copies the whole raw-data folder)…", flush=True)
+    t = time.perf_counter()
     shutil.copytree(src, out_dir / modality)
+    print(f"    copied raw {modality}/ in {time.perf_counter() - t:.1f}s", flush=True)
 
 
 def _copy_supplemental_files(subject_id: str, modality: str, out_dir: Path) -> None:
@@ -123,10 +128,16 @@ def _copy_supplemental_files(subject_id: str, modality: str, out_dir: Path) -> N
 def main() -> None:
     """Write every (subject × modality) bundle under RESULTS_DIR, one named folder each."""
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    print(f"Writing bundles to {RESULTS_DIR}")
-    for subject_id in SUBJECTS:
-        for modality in MODALITIES:
-            write_bundle(subject_id, modality)
+    pairs = [(subject_id, modality) for subject_id in SUBJECTS for modality in MODALITIES]
+    total = len(pairs)
+    print(f"Writing {total} bundles to {RESULTS_DIR}", flush=True)
+    run_start = time.perf_counter()
+    for i, (subject_id, modality) in enumerate(pairs, start=1):
+        print(f"[{i}/{total}] {subject_id} {modality}: building bundle…", flush=True)
+        started = time.perf_counter()
+        write_bundle(subject_id, modality)
+        print(f"[{i}/{total}] {subject_id} {modality}: done in {time.perf_counter() - started:.1f}s", flush=True)
+    print(f"All {total} bundles written to {RESULTS_DIR} in {time.perf_counter() - run_start:.1f}s.", flush=True)
 
 
 if __name__ == "__main__":
