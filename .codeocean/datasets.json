@@ -2,8 +2,16 @@
 	"version": 1,
 	"attached_datasets": [
 		{
+			"id": "80538a79-932f-4ee1-88a9-20a4c0f54662",
+			"mount": "BARseq_soma_barcodes"
+		},
+		{
 			"id": "95dbe512-bcf8-4f68-9947-0fb99320f3b4",
 			"mount": "780345_2025-02-20_00-00-00"
+		},
+		{
+			"id": "b60463ab-6d8b-4b0f-9074-5a579e22b037",
+			"mount": "MAPseq_ROI_info"
 		},
 		{
 			"id": "d182e926-84f8-42b7-ac7c-ba712f1dd971",
