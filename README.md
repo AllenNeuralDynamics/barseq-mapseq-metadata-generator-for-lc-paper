@@ -62,6 +62,31 @@ The two `acquisition.json` flavors have different specimen-id semantics:
 Both lists are derived directly from the `Procedures` object built in the
 same run, so the acquisition and procedures stay in sync by construction.
 
+## Supplemental files folded into the raw bundles
+
+A handful of per-subject files belong in the raw assets but currently live in
+separate "loose CSV" data assets rather than inside the `780345_*` / `780346_*`
+input assets. `run_capsule.py` folds them back into each subject's
+`<Modality>/` folder so they travel downstream: the MAT2RDS conversion capsule
+and the BARseq/MAPseq analysis capsule read them from `<asset>/<Modality>/`,
+and the analysis breaks without them (the BARseq–MAPseq barcode-matching stage
+dies on the missing reads).
+
+| Supplemental asset (mount name) | Folded into | Example files |
+|---------------------------------|-------------|---------------|
+| `BARseq_soma_barcodes`          | `BARseq/`   | `barcodes_BC_qc_<id>.csv`, `LC_visualQC_barcoded_cells_<id>.csv` |
+| `MAPseq_ROI_info`               | `MAPseq/`   | per-subject MAPseq ROI info |
+
+Files are routed to the right subject by `<subject_id>` in the filename
+(`SUPPLEMENTAL_ASSETS` in `run_capsule.py`). Attach both assets in Code Ocean
+under exactly those mount names; if one isn't mounted the run warns and skips
+it rather than failing.
+
+Background: the raw assets were rebuilt without these files
+(AllenNeuralDynamics/aind-scientific-computing#747), which silently broke the
+combined MAPseq analysis downstream. Baking them into the raw bundle here fixes
+it at the source, so every future rebuild carries them through.
+
 ## Running
 
 The capsule has two pieces. **Step 1** pre-populates the metadata-service
@@ -107,9 +132,11 @@ project name registered in the metadata service exactly, otherwise
 
 #### On Code Ocean (the canonical release path)
 
-Attach both input data assets (the `780345_*` and `780346_*` assets that
-contain the `BARseq/` and `MAPseq/` subfolders) and click **Reproducible
-Run** — no parameters. The single run writes all four bundles into
+Attach the two `780345_*` / `780346_*` input data assets (which contain the
+`BARseq/` and `MAPseq/` subfolders) **and** the two supplemental loose-CSV
+assets `BARseq_soma_barcodes` and `MAPseq_ROI_info` (mounted under exactly
+those names — see "Supplemental files folded into the raw bundles" above).
+Then click **Reproducible Run** — no parameters. The single run writes all four bundles into
 `/results/<name>/` folders (see the layout above). Save each folder out as
 its own data asset under its folder name, then hand the four asset references
 off to whoever owns moving them to `aind-open-data`.
